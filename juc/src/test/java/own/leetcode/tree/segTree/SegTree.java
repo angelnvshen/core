@@ -21,7 +21,7 @@ public class SegTree {
         SegTree segTree = new SegTree(arr);
         Printer.print(segTree.getTree());
         System.out.println();
-        segTree.update(4, 6);
+        segTree.update(1, 10);
         Printer.print(segTree.getTree());
 
         System.out.println(segTree.query(2, 5));
