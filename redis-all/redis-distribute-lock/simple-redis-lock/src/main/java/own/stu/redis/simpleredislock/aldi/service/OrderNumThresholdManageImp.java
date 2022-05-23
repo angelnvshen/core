@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import own.stu.redis.simpleredislock.aldi.common.CheckoutErrCode;
 import own.stu.redis.simpleredislock.aldi.common.CheckoutException;
 import own.stu.redis.simpleredislock.aldi.common.OrderNumThresholdContext;
+import own.stu.redis.simpleredislock.aldi.common.RedisKeyConstant;
 import own.stu.redis.simpleredislock.aldi.model.CreateSoDTO;
 import own.stu.redis.simpleredislock.aldi.model.OrderDeliveryTimeOption;
 
@@ -29,7 +30,7 @@ import java.util.concurrent.TimeUnit;
 @Service
 public class OrderNumThresholdManageImp {
 
-    private final Logger logger = LoggerFactory.getLogger(getClass());
+    protected static final Logger logger = LoggerFactory.getLogger(OrderNumThresholdManageImp.class);
 
     // 没有订单上限的阈值
     public static final Integer NO_LIMIT_ORDER_REGISTER = -1;
@@ -48,7 +49,7 @@ public class OrderNumThresholdManageImp {
     @Autowired
     private RedisTemplate<String, String> redisTemplate;
 
-    private ThreadPoolExecutor orderNumThresholdExecutor = new ThreadPoolExecutor(2, 5, 60, TimeUnit.SECONDS, new LinkedBlockingDeque<>());;
+    private ThreadPoolExecutor orderNumThresholdExecutor = new ThreadPoolExecutor(2, 5, 60, TimeUnit.SECONDS, new LinkedBlockingDeque<>());
 
     public void increaseThreshold(CreateSoDTO userOrder) {
 
@@ -77,9 +78,16 @@ public class OrderNumThresholdManageImp {
             try {
                 boolean lock = rLock.tryLock(0, TimeUnit.SECONDS);
 
-                if(!lock) {
+                if (!lock) {
                     throw new CheckoutException(CheckoutErrCode.CURRENT_DELIVERY_TIME_TO_MUCH_REGISTER);
                 }
+
+                /*StoreCommunityInfo storeCommunityInfo = getStoreCommunityInfo(context);
+                //1、先校验小区当天的订单上限，再校验配送时段的订单上限；2个都未达到上限则可下单，其中1个达到上限则都不可下单
+                String communityOrderNumThresholdKey = getCommunityOrderNumThresholdKey(userOrder.getStoreId());
+                String communityOrderNumThresholdHashKey = getCommunityOrderNumThresholdHashKey(storeCommunityInfo.getCode());
+                // 新增社区团购 提交订单小区下单数校验
+                communityIncreaseThreshold(communityOrderNumThresholdKey, communityOrderNumThresholdHashKey,storeCommunityInfo.getLimit(), userOrder);*/
 
                 // key ：storeId  + thresholdId , value : num
                 Long value = redisTemplate.opsForValue().increment(orderNumThresholdKey, 1L);
@@ -91,7 +99,7 @@ public class OrderNumThresholdManageImp {
                         RedisAtomicLong redisAtomicLong = new RedisAtomicLong(orderNumThresholdKey,
                                 Objects.requireNonNull(redisTemplate.getConnectionFactory()));
                         redisAtomicLong.expire(8, TimeUnit.DAYS);
-                        if(value == 0){
+                        if (value == 0) {
                             value = redisAtomicLong.incrementAndGet();
                         }
                     }
@@ -107,10 +115,21 @@ public class OrderNumThresholdManageImp {
             } finally {
                 try {
                     rLock.unlock();
-                }catch (Exception e) {
+                } catch (Exception e) {
                 }
             }
         }
+    }
+
+    /**
+     * 获取是否优先使用自配送的redis标识
+     *
+     * @param storeId
+     * @return
+     */
+    private String getSelfDeliveryValueByStoreId(Long storeId) {
+        Object val = redisTemplate.opsForHash().get(RedisKeyConstant.STORE_COMMUNITY_KEY_PREFIX + storeId, RedisKeyConstant.STORE_COMMUNITY_KEY_HASHKEY_SWITCH);
+        return val == null ? null : val.toString();
     }
 
     private boolean switchOpenedStore(OrderDeliveryTimeOption timeOption) {
@@ -191,13 +210,11 @@ public class OrderNumThresholdManageImp {
         });
     }
 
-    public String getOrderNumThresholdKey(OrderDeliveryTimeOption timeOption){
+    public String getOrderNumThresholdKey(OrderDeliveryTimeOption timeOption) {
         return String.format(orderNumThresholdKeyFormat, timeOption.getStoreId(), timeOption.getThresholdId());
     }
 
     private static class DecreaseThreshold implements Runnable {
-
-        private final Logger logger = LoggerFactory.getLogger(getClass());
 
         private final String key;
 
@@ -208,7 +225,6 @@ public class OrderNumThresholdManageImp {
             this.redisTemplate = redisTemplate;
         }
 
-        @Override
         public void run() {
             try {
                 redisTemplate.opsForValue().increment(key, -1);

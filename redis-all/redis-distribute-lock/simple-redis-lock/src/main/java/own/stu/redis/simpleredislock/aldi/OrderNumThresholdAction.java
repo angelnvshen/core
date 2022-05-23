@@ -14,7 +14,9 @@ import own.stu.redis.simpleredislock.aldi.common.OrderNumThresholdContext;
 import own.stu.redis.simpleredislock.aldi.common.RemoteServiceException;
 import own.stu.redis.simpleredislock.aldi.model.CreateSoDTO;
 import own.stu.redis.simpleredislock.aldi.model.OrderDeliveryTimeOption;
+import own.stu.redis.simpleredislock.aldi.service.OrderCommunityCountManageImp;
 import own.stu.redis.simpleredislock.aldi.service.OrderNumThresholdManageImp;
+import own.stu.redis.simpleredislock.aldi.service.OrderRedisCountManageImpl;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -35,7 +37,13 @@ public class OrderNumThresholdAction {
     private OrderNumThresholdManageImp orderNumThresholdManage;
 
     @Autowired
+    private OrderCommunityCountManageImp communityCountManage;
+
+    @Autowired
     private OrderNumThresholdContext orderNumThresholdContext;
+
+    @Autowired
+    private OrderRedisCountManageImpl redisCountManage;
 
     @RequestMapping(value = "test", produces = "application/json")
     @ResponseBody
@@ -78,10 +86,10 @@ public class OrderNumThresholdAction {
                     try {
                         ThreadLocalRandom random = ThreadLocalRandom.current();
                         TimeUnit.MILLISECONDS.sleep(200 + random.nextInt(500));
-                        orderNumThresholdManage.increaseThreshold(createSoDTO);
+                        redisCountManage.increaseThreshold(createSoDTO);
                         randomException(random.nextInt(10));
                     } catch (RemoteServiceException e) {
-                        orderNumThresholdManage.decreaseThreshold(createSoDTO);
+                        redisCountManage.decreaseThreshold(createSoDTO);
                         log.warn("testParallel, RemoteServiceException: ", e);
                     } catch (InterruptedException e) {
                         log.warn("testParallel, InterruptedException: ", e);
@@ -108,7 +116,7 @@ public class OrderNumThresholdAction {
 
         OrderDeliveryTimeOption timeOption = new OrderDeliveryTimeOption();
         timeOption.setStoreId(2201100002602393L);
-        timeOption.setRegisterThreshold(500);
+        timeOption.setRegisterThreshold(250);
         timeOption.setThresholdId(thresholdId);
 
         return timeOption;
@@ -117,5 +125,8 @@ public class OrderNumThresholdAction {
     void reset(OrderDeliveryTimeOption timeOption) {
         String orderNumThresholdKey = orderNumThresholdManage.getOrderNumThresholdKey(timeOption);
         redisTemplate.opsForValue().set(orderNumThresholdKey, "0");
+
+        String communityCountKey = communityCountManage.communitCountKey(2201100002602393L, "2205130000385851");
+        redisTemplate.opsForValue().set(communityCountKey, "0");
     }
 }
