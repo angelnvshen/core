@@ -1,4 +1,4 @@
-package own.stu.redis.simpleredislock;
+package own.stu.redis.simpleredislock.redisLock;
 
 import org.junit.Assert;
 import org.junit.Before;
