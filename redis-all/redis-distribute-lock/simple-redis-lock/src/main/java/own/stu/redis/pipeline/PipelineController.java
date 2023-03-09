@@ -18,9 +18,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.lettuce.LettuceConnection;
-import org.springframework.data.redis.core.RedisCallback;
-import org.springframework.data.redis.core.RedisConnectionUtils;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.*;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StopWatch;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -28,9 +26,11 @@ import org.springframework.web.bind.annotation.RestController;
 import own.stu.redis.logAop.LogAnnotation;
 
 import javax.annotation.Resource;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 
 @RequestMapping("pipeline")
@@ -156,19 +156,33 @@ public class PipelineController {
     }
 
     private void incrByPipeline(List<Integer> recordList) {
-        redisTemplate.executePipelined(new RedisCallback<Object>() {
-            @Override
-            public Object doInRedis(RedisConnection connection) throws DataAccessException {
-                try {
-                    for (Integer record : recordList) {
-                        byte[] key = (PREFIX + record).getBytes();
-                        connection.incrBy(key, 1);
-                    }
-                } catch (Exception e) {
-                    System.out.println(e);
-                }
-                return null;
+        String prefix = "xxx";
+
+        redisTemplate.executePipelined((RedisCallback<Object>) connection -> {
+            try {
+                ScanOptions scanOptions = ScanOptions.scanOptions().count(10L).match(prefix + "*").build();
+
+                Cursor<byte[]> cursors = connection.scan(scanOptions);
+
+                cursors.forEachRemaining(bytes -> {
+                    String key = new String(bytes, StandardCharsets.UTF_8);
+                    connection.del(key.getBytes());
+                });
+               /* for (Integer record : recordList) {
+                    byte[] key = (PREFIX + record).getBytes();
+                    connection.incrBy(key, 1);
+                }*/
+            } catch (Exception e) {
+                System.out.println(e);
             }
+            return null;
         });
+    }
+
+    @LogAnnotation
+    @RequestMapping("logAnn")
+    public String logAnn() {
+        int i = 10 / 0;
+        return "SUCCESS";
     }
 }

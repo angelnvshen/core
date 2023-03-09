@@ -1,6 +1,7 @@
 package own.stu.redis.logAop;
 
 import org.aspectj.lang.ProceedingJoinPoint;
+import org.aspectj.lang.annotation.AfterThrowing;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Pointcut;
@@ -55,6 +56,7 @@ public class AopAspect {
     //环绕通知=前置+目标方法执行+后置通知，proceed方法就是用于启动目标方法执行的
     public Object around(ProceedingJoinPoint point) throws Throwable {
 
+        System.out.println(" ===== around ======= ");
         //获取方法签名(通过此签名获取目标方法信息)
         MethodSignature ms=(MethodSignature)point.getSignature();
 
@@ -62,18 +64,28 @@ public class AopAspect {
         stopWatch.start(ms.getName());
 
         //执行目标方法，获得目标方法的返回值
-        Object result = point.proceed();
+        try {
 
-        /*try {
+            Object result = point.proceed();
+            /*try {
             //方法执行后进行log保存的方法调用
             //同类中不走代理，需要创建代理对象
                         SysLogAspect logAspect = (SysLogAspect) AopContext.currentProxy();
             logAspect.saveLog(point, time, result);
         } catch (Exception e) {
         }*/
-        stopWatch.stop();
-        System.out.println(stopWatch.prettyPrint());
-        return result;
+            return result;
+        }finally {
+            stopWatch.stop();
+            System.out.println(stopWatch.prettyPrint());
+        }
+    }
+
+    @AfterThrowing(value = "pointCut()", throwing = "ex")
+    public void afterThrowing(Throwable ex) throws Throwable {
+        System.out.println(" ===== afterThrowing ======= ");
+        // TODO 方法发生了异常，怎么处理？ 是否加日志
+        System.out.println("afterThrowing : ======" + ex.getMessage());
     }
 
     /**
